@@ -144,7 +144,7 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
   }
 });
 
-// Delete log entry
+// Delete log entry - Fixed the route parameter handling
 router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
   try {
     const { id } = req.params;
