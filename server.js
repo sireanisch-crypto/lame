@@ -7,13 +7,13 @@ const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(cors({
-  origin: ['https://lame-h66chrdid-anis-chebils-projects.vercel.app/', 'http://localhost:3000'], // Add your Vercel URL here
+  origin: ['https://lame-h66chrdid-anis-chebils-projects.vercel.app', 'http://localhost:10000'],
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
 
-// Add a specific route handler for the root path
+// Test route
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Blade Management API is running',
@@ -37,19 +37,25 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api', require('./routes/api'));
 
-// Catch-all handler for debugging
+// Catch-all handler
 app.use((req, res) => {
-  console.log('Unhandled request:', req.method, req.url);
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ 
+    message: 'Route not found',
+    requested: `${req.method} ${req.url}`
+  });
 });
 
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(500).json({ message: 'Internal server error' });
+  res.status(500).json({ 
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
