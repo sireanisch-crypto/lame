@@ -5,9 +5,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Middleware - Make sure this allows your frontend URL
+// Middleware - Fix CORS
 app.use(cors({
-  origin: ['https://blade-management-frontend.vercel.app/', 'http://localhost:10000', 'https://lame-inob.onrender.com'], // Add all origins
+  origin: ['https://blade-management-frontend.vercel.app', 'https://lame-inob.onrender.com', 'http://localhost:10000'],
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
