@@ -10,12 +10,14 @@ router.get('/data', async (req, res) => {
     const logsQuery = 'SELECT * FROM logs ORDER BY created_at DESC';
     const machineBladesQuery = 'SELECT * FROM machine_blades';
     const bladeAssignmentsQuery = 'SELECT * FROM blade_assignments';
+    const machineStatusQuery = 'SELECT * FROM machine_status';  // ADD THIS LINE
     
-    const [inventoryResult, logsResult, machineBladesResult, bladeAssignmentsResult] = await Promise.all([
+    const [inventoryResult, logsResult, machineBladesResult, bladeAssignmentsResult, machineStatusResult] = await Promise.all([
       db.query(inventoryQuery),
       db.query(logsQuery),
       db.query(machineBladesQuery),
-      db.query(bladeAssignmentsQuery)
+      db.query(bladeAssignmentsQuery),
+      db.query(machineStatusQuery)  // ADD THIS LINE
     ]);
     
     // Transform inventory data to match frontend structure
@@ -45,11 +47,18 @@ router.get('/data', async (req, res) => {
       };
     });
     
+    // Transform machine status data  // ADD THIS SECTION
+    const machineStatus = {};
+    machineStatusResult.rows.forEach(item => {
+      machineStatus[item.machine_id] = item.status;
+    });
+    
     res.json({
       inventory,
       logs: logsResult.rows,
       machineBlades,
-      bladeAssignments
+      bladeAssignments,
+      machineStatus  // ADD THIS LINE
     });
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -144,7 +153,29 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
   }
 });
 
-// Delete log entry - Fixed the route parameter handling
+// Update machine status  // ADD THIS NEW ENDPOINT
+router.post('/machine-status', verifyStockPassword, async (req, res) => {
+  try {
+    const { machine_id, status } = req.body;
+    
+    const query = `
+      INSERT INTO machine_status (machine_id, status)
+      VALUES ($1, $2)
+      ON CONFLICT (machine_id)
+      DO UPDATE SET
+        status = EXCLUDED.status
+      RETURNING *
+    `;
+    
+    const result = await db.query(query, [machine_id, status]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating machine status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete log entry - Fixed route parameter handling
 router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
   try {
     const { id } = req.params;
@@ -168,6 +199,7 @@ router.post('/reset', verifyStockPassword, async (req, res) => {
   try {
     await db.query('DELETE FROM blade_assignments');
     await db.query('DELETE FROM machine_blades');
+    await db.query('DELETE FROM machine_status');  // ADD THIS LINE
     await db.query('DELETE FROM logs');
     
     // Reset inventory to zero
