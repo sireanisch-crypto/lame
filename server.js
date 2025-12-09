@@ -13,7 +13,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Add a specific route handler for the root path
+// Add a specific route handler for root path
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Blade Management API is running',
@@ -24,6 +24,7 @@ app.get('/', (req, res) => {
       logs: '/api/logs',
       'machine-blades': '/api/machine-blades',
       'blade-assignments': '/api/blade-assignments',
+      'machine-status': '/api/machine-status',  // Add this line
       reset: '/api/reset'
     }
   });
