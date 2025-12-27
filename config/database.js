@@ -1,12 +1,10 @@
-const { Pool } = require('pg');
+// database.js - Supabase Configuration
+const { createClient } = require('@supabase/supabase-js');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+// Create a single Supabase client for the app to use
+const supabase = createClient(
+  process.env.SUPABASE_URL, // Your new Supabase Project URL
+  process.env.SUPABASE_ANON_KEY // Your new Supabase Anon Key
+);
 
-module.exports = {
-  query: (text, params) => pool.query(text, params),
-};
+module.exports = { supabase };

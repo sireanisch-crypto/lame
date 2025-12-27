@@ -8,9 +8,10 @@ const PORT = process.env.PORT || 10000;
 // Middleware - Fix CORS
 app.use(cors({
   origin: [
-    'https://blade-management-frontend.vercel.app',  // Your old URL
-    'https://soudeuse-yp.vercel.app',      // Your new URL - ADD THIS
-    'https://lame-inob.onrender.com', 
+    'https://blade-management-frontend.vercel.app', // Your Vercel URL
+    'https://soudeuse-yp.vercel.app',      // Your old URL (keep for now)
+    'https://lame-inob.onrender.com',
+    'https://rhoqmbvszurwjakdtdek.supabase.co',
     'http://localhost:10000'
   ],
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
@@ -21,7 +22,7 @@ app.use(express.json());
 // Add a specific route handler for root path
 app.get('/', (req, res) => {
   res.status(200).json({ 
-    message: 'Blade Management API is running',
+    message: 'Blade Management API is running on Supabase',
     version: '1.0.0',
     endpoints: {
       data: '/api/data',
@@ -29,7 +30,7 @@ app.get('/', (req, res) => {
       logs: '/api/logs',
       'machine-blades': '/api/machine-blades',
       'blade-assignments': '/api/blade-assignments',
-      'machine-status': '/api/machine-status',  // Add this line
+      'machine-status': '/api/machine-status',
       reset: '/api/reset'
     }
   });
@@ -57,5 +58,5 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} and connected to Supabase`);
 });
