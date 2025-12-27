@@ -1,89 +1,64 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database'); // This now imports the Supabase client
+const db = require('../config/database');
 const { verifyStockPassword } = require('../middleware/auth');
 
 // Get all data
 router.get('/data', async (req, res) => {
   try {
-    // Use Supabase client to fetch data from all tables at once
-    const { data: inventoryData, error: inventoryError } = await db.supabase
-      .from('inventory')
-      .select('*');
+    const inventoryQuery = 'SELECT * FROM inventory';
+    const logsQuery = 'SELECT * FROM logs ORDER BY created_at DESC';
+    const machineBladesQuery = 'SELECT * FROM machine_blades';
+    const bladeAssignmentsQuery = 'SELECT * FROM blade_assignments';
+    const machineStatusQuery = 'SELECT * FROM machine_status';  // ADD THIS LINE
     
-    const { data: logsData, error: logsError } = await db.supabase
-      .from('logs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [inventoryResult, logsResult, machineBladesResult, bladeAssignmentsResult, machineStatusResult] = await Promise.all([
+      db.query(inventoryQuery),
+      db.query(logsQuery),
+      db.query(machineBladesQuery),
+      db.query(bladeAssignmentsQuery),
+      db.query(machineStatusQuery)  // ADD THIS LINE
+    ]);
     
-    const { data: bladesData, error: bladesError } = await db.supabase
-      .from('machine_blades')
-      .select('*');
-    
-    const { data: assignmentsData, error: assignmentsError } = await db.supabase
-      .from('blade_assignments')
-      .select('*');
-    
-    const { data: statusData, error: statusError } = await db.supabase
-      .from('machine_status')
-      .select('*');
-
-    // Check for any errors
-    if (inventoryError || logsError || bladesError || assignmentsError || statusError) {
-      console.error('Error fetching data from Supabase:', inventoryError || logsError || bladesError || assignmentsError || statusError);
-      throw new Error('Failed to fetch data from Supabase');
-    }
-
     // Transform inventory data to match frontend structure
     const inventory = {};
-    if (inventoryData.data) {
-      inventoryData.data.forEach(item => {
-        if (!inventory[item.group_name]) {
-          inventory[item.group_name] = {};
-        }
-        inventory[item.group_name][item.blade_type] = {
-          fixed: item.fixed || 0,
-          available: item.available || 0
-        };
-      });
-    }
+    inventoryResult.rows.forEach(item => {
+      if (!inventory[item.group_name]) {
+        inventory[item.group_name] = {};
+      }
+      inventory[item.group_name][item.blade_type] = {
+        fixed: item.fixed,
+        available: item.available
+      };
+    });
     
     // Transform machine blades data
     const machineBlades = {};
-    if (bladesData.data) {
-      bladesData.data.forEach(item => {
-        machineBlades[item.machine_id] = item.blade_type;
-      });
-    }
+    machineBladesResult.rows.forEach(item => {
+      machineBlades[item.machine_id] = item.blade_type;
+    });
     
     // Transform blade assignments data
     const bladeAssignments = {};
-    if (assignmentsData.data) {
-      assignmentsData.data.forEach(item => {
-        bladeAssignments[item.machine_id] = {
-          type: item.blade_type,
-          count: item.count || 0
-        };
-      });
-    }
+    bladeAssignmentsResult.rows.forEach(item => {
+      bladeAssignments[item.machine_id] = {
+        type: item.blade_type,
+        count: item.count
+      };
+    });
     
-    // Transform machine status data
+    // Transform machine status data  // ADD THIS SECTION
     const machineStatus = {};
-    if (statusData.data) {
-      statusData.data.forEach(item => {
-        machineStatus[item.machine_id] = item.status;
-      });
-    }
-    
-    // Transform logs data
-    const logs = logsData.data ? logsData.data : [];
+    machineStatusResult.rows.forEach(item => {
+      machineStatus[item.machine_id] = item.status;
+    });
     
     res.json({
       inventory,
-      logs,
+      logs: logsResult.rows,
       machineBlades,
       bladeAssignments,
-      machineStatus
+      machineStatus  // ADD THIS LINE
     });
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -96,23 +71,18 @@ router.post('/inventory', verifyStockPassword, async (req, res) => {
   try {
     const { group_name, blade_type, fixed, available } = req.body;
     
-    const { data, error } = await db.supabase
-      .from('inventory')
-      .upsert({
-        group_name,
-        blade_type,
-        fixed,
-        available
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO inventory (group_name, blade_type, fixed, available)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (group_name, blade_type)
+      DO UPDATE SET
+        fixed = EXCLUDED.fixed,
+        available = EXCLUDED.available
+      RETURNING *
+    `;
     
-    if (error) {
-      console.error('Error updating inventory:', error);
-      throw new Error('Failed to update inventory');
-    }
-    
-    res.json(data);
+    const result = await db.query(query, [group_name, blade_type, fixed, available]);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating inventory:', error);
     res.status(500).json({ message: 'Server error' });
@@ -124,26 +94,14 @@ router.post('/logs', verifyStockPassword, async (req, res) => {
   try {
     const { machine_name, blade_type, action, amount, person_name, group_name } = req.body;
     
-    const { data, error } = await db.supabase
-      .from('logs')
-      .insert({
-        machine_name,
-        blade_type,
-        action,
-        amount,
-        person_name,
-        group_name,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO logs (machine_name, blade_type, action, amount, person_name, group_name)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
     
-    if (error) {
-      console.error('Error adding log entry:', error);
-      throw new Error('Failed to add log entry');
-    }
-    
-    res.json(data);
+    const result = await db.query(query, [machine_name, blade_type, action, amount, person_name, group_name]);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error adding log entry:', error);
     res.status(500).json({ message: 'Server error' });
@@ -155,21 +113,17 @@ router.post('/machine-blades', verifyStockPassword, async (req, res) => {
   try {
     const { machine_id, blade_type } = req.body;
     
-    const { data, error } = await db.supabase
-      .from('machine_blades')
-      .upsert({
-        machine_id,
-        blade_type
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO machine_blades (machine_id, blade_type)
+      VALUES ($1, $2)
+      ON CONFLICT (machine_id)
+      DO UPDATE SET
+        blade_type = EXCLUDED.blade_type
+      RETURNING *
+    `;
     
-    if (error) {
-      console.error('Error updating machine blade:', error);
-      throw new Error('Failed to update machine blade');
-    }
-    
-    res.json(data);
+    const result = await db.query(query, [machine_id, blade_type]);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating machine blade:', error);
     res.status(500).json({ message: 'Server error' });
@@ -181,72 +135,59 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
   try {
     const { machine_id, blade_type, count } = req.body;
     
-    const { data, error } = await db.supabase
-      .from('blade_assignments')
-      .upsert({
-        machine_id,
-        blade_type,
-        count
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO blade_assignments (machine_id, blade_type, count)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (machine_id)
+      DO UPDATE SET
+        blade_type = EXCLUDED.blade_type,
+        count = EXCLUDED.count
+      RETURNING *
+    `;
     
-    if (error) {
-      console.error('Error updating blade assignment:', error);
-      throw new Error('Failed to update blade assignment');
-    }
-    
-    res.json(data);
+    const result = await db.query(query, [machine_id, blade_type, count]);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating blade assignment:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Update machine status
+// Update machine status  // ADD THIS NEW ENDPOINT
 router.post('/machine-status', verifyStockPassword, async (req, res) => {
   try {
     const { machine_id, status } = req.body;
     
-    const { data, error } = await db.supabase
-      .from('machine_status')
-      .upsert({
-        machine_id,
-        status
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO machine_status (machine_id, status)
+      VALUES ($1, $2)
+      ON CONFLICT (machine_id)
+      DO UPDATE SET
+        status = EXCLUDED.status
+      RETURNING *
+    `;
     
-    if (error) {
-      console.error('Error updating machine status:', error);
-      throw new Error('Failed to update machine status');
-    }
-    
-    res.json(data);
+    const result = await db.query(query, [machine_id, status]);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating machine status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Delete log entry
+// Delete log entry - Fixed route parameter handling
 router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const { data, error } = await db.supabase
-      .from('logs')
-      .delete()
-      .eq('id', id)
-      .select()
-      .single();
+    const query = 'DELETE FROM logs WHERE id = $1 RETURNING *';
+    const result = await db.query(query, [id]);
     
-    if (error) {
-      console.error('Error deleting log entry:', error);
-      throw new Error('Failed to delete log entry');
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Log entry not found' });
     }
     
-    res.json(data);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error deleting log entry:', error);
     res.status(500).json({ message: 'Server error' });
@@ -256,25 +197,20 @@ router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
 // Reset all data
 router.post('/reset', verifyStockPassword, async (req, res) => {
   try {
-    // Delete all data from all tables
-    await db.supabase.from('blade_assignments').delete().neq('machine_id', '');
-    await db.supabase.from('machine_blades').delete().neq('machine_id', '');
-    await db.supabase.from('machine_status').delete().neq('machine_id', '');
-    await db.supabase.from('logs').delete().neq('machine_id', '');
+    await db.query('DELETE FROM blade_assignments');
+    await db.query('DELETE FROM machine_blades');
+    await db.query('DELETE FROM machine_status');  // ADD THIS LINE
+    await db.query('DELETE FROM logs');
     
     // Reset inventory to zero
-    const { data: inventoryData } = await db.supabase
-      .from('inventory')
-      .select('*');
+    const inventoryQuery = 'SELECT * FROM inventory';
+    const inventoryResult = await db.query(inventoryQuery);
     
-    if (inventoryData.data) {
-      for (const item of inventoryData.data) {
-        await db.supabase
-          .from('inventory')
-          .update({ fixed: 0, available: 0 })
-          .eq('group_name', item.group_name)
-          .eq('blade_type', item.blade_type);
-      }
+    for (const item of inventoryResult.rows) {
+      await db.query(
+        'UPDATE inventory SET fixed = 0, available = 0 WHERE group_name = $1 AND blade_type = $2',
+        [item.group_name, item.blade_type]
+      );
     }
     
     res.json({ message: 'All data has been reset successfully' });
