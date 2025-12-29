@@ -11,7 +11,7 @@ app.use(cors({
   origin: [
     'https://blade-management-frontend.vercel.app', // Your Vercel URL
     'https://soudeuse-yp.vercel.app',      // Your old URL (keep for now)
-    'https://lame-inob.onrender.com',
+    // 'https://lame-inob.onrender.com',
     'https://rhoqmbvszurwjakdtdek.supabase.co',
     'http://localhost:10000'
   ],
