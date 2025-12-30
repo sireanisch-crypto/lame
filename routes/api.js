@@ -113,9 +113,11 @@ router.post('/logs', verifyStockPassword, async (req, res) => {
 router.post('/machine-blades', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, blade_type } = req.body;
+        // The .select('*') was incorrectly placed here. It has been removed.
         const { error } = await supabase
-            .from('machine_blades').select('*') // CORRECTED
+            .from('machine_blades')
             .upsert({ machine_id, blade_type }, { onConflict: 'machine_id' });
+
         if (error) throw error;
         res.status(200).json({ message: 'Machine blade updated successfully' });
     } catch (error) {
