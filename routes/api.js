@@ -147,6 +147,7 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
 router.post('/machine-status', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, status } = req.body;
+        // The .select('*') was incorrectly placed here. It has been removed.
         const { error } = await supabase
             .from('machine_status')
             .upsert({ machine_id, status }, { onConflict: 'machine_id' });
