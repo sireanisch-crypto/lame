@@ -30,9 +30,9 @@ router.get('/data', async (req, res) => {
         ] = await Promise.all([
             supabase.from('inventory').select('*'),
             supabase.from('logs').select('*').order('created_at', { ascending: false }),
-            supabase.from('machineBlades').select('*'),
-            supabase.from('bladeAssignments').select('*'),
-            supabase.from('machineStatus').select('*')
+            supabase.from('machine_blades').select('*'),
+            supabase.from('blade_assignments').select('*'),
+            supabase.from('machine_status').select('*')
         ]);
 
         // Check for any errors from Supabase
@@ -126,7 +126,7 @@ router.post('/machine-blades', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, blade_type } = req.body;
         const { error } = await supabase
-            .from('machineBlades')
+            .from('machine_blades')
             .upsert({ machine_id, blade_type }, { onConflict: 'machine_id' });
 
         if (error) throw error;
@@ -142,7 +142,7 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, blade_type, count } = req.body;
         const { error } = await supabase
-            .from('bladeAssignments')
+            .from('blade_assignments')
             .upsert({ machine_id, blade_type, count }, { onConflict: 'machine_id' });
 
         if (error) throw error;
@@ -158,7 +158,7 @@ router.post('/machine-status', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, status } = req.body;
         const { error } = await supabase
-            .from('machineStatus')
+            .from('machine_status')
             .upsert({ machine_id, status }, { onConflict: 'machine_id' });
 
         if (error) throw error;
@@ -196,9 +196,9 @@ router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
 router.post('/reset', verifyStockPassword, async (req, res) => {
     try {
         // Delete all rows from the tables. Using .neq() is a way to delete all.
-        const { error: baError } = await supabase.from('bladeAssignments').delete().neq('machine_id', '');
-        const { error: mbError } = await supabase.from('machineBlades').delete().neq('machine_id', '');
-        const { error: msError } = await supabase.from('machineStatus').delete().neq('machine_id', '');
+        const { error: baError } = await supabase.from('blade_assignments').delete().neq('machine_id', '');
+        const { error: mbError } = await supabase.from('machine_blades').delete().neq('machine_id', '');
+        const { error: msError } = await supabase.from('machine_status').delete().neq('machine_id', '');
         const { error: logError } = await supabase.from('logs').delete().neq('id', -1);
 
         if (baError || mbError || msError || logError) {
