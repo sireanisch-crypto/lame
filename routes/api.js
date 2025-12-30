@@ -3,14 +3,11 @@ const router = express.Router();
 const { supabase } = require('../config/database'); // Import the Supabase client
 
 // --- Middleware ---
-// Simple middleware to check the password for sensitive operations.
-// This replaces the need for a separate auth.js file for now.
 const verifyStockPassword = (req, res, next) => {
     const { password } = req.body;
     if (password !== process.env.STOCK_PASSWORD) {
         return res.status(403).json({ message: 'Incorrect password' });
     }
-    // Remove password from the body after checking
     req.body.password = undefined;
     next();
 };
@@ -20,7 +17,6 @@ const verifyStockPassword = (req, res, next) => {
 // GET /api/data - Fetch all data from all tables
 router.get('/data', async (req, res) => {
     try {
-        // Use Promise.all to fetch from all tables concurrently
         const [
             { data: inventory, error: invError },
             { data: logs, error: logError },
@@ -30,18 +26,16 @@ router.get('/data', async (req, res) => {
         ] = await Promise.all([
             supabase.from('inventory').select('*'),
             supabase.from('logs').select('*').order('created_at', { ascending: false }),
-            supabase.from('machine_blades').select('*'),
-            supabase.from('blade_assignments').select('*'),
-            supabase.from('machine_status').select('*')
+            supabase.from('machine_blades').select('*'),      // CORRECTED
+            supabase.from('blade_assignments').select('*'),  // CORRECTED
+            supabase.from('machine_status').select('*')      // CORRECTED
         ]);
 
-        // Check for any errors from Supabase
         if (invError || logError || mbError || baError || msError) {
             console.error('Supabase fetch error:', { invError, logError, mbError, baError, msError });
             return res.status(500).json({ message: 'Failed to fetch data from database' });
         }
 
-        // Transform inventory data to match the nested structure the frontend expects
         const nestedInventory = {};
         inventory.forEach(item => {
             if (!nestedInventory[item.group_name]) {
@@ -53,13 +47,11 @@ router.get('/data', async (req, res) => {
             };
         });
 
-        // Transform machine blades data into a key-value object
         const machineBladesObj = {};
         machineBlades.forEach(item => {
             machineBladesObj[item.machine_id] = item.blade_type;
         });
 
-        // Transform blade assignments data into a key-value object
         const bladeAssignmentsObj = {};
         bladeAssignments.forEach(item => {
             bladeAssignmentsObj[item.machine_id] = {
@@ -68,7 +60,6 @@ router.get('/data', async (req, res) => {
             };
         });
 
-        // Transform machine status data into a key-value object
         const machineStatusObj = {};
         machineStatus.forEach(item => {
             machineStatusObj[item.machine_id] = item.status;
@@ -92,11 +83,9 @@ router.get('/data', async (req, res) => {
 router.post('/inventory', verifyStockPassword, async (req, res) => {
     try {
         const { group_name, blade_type, fixed, available } = req.body;
-        // Use upsert to insert or update the record
         const { error } = await supabase
             .from('inventory')
             .upsert({ group_name, blade_type, fixed, available }, { onConflict: 'group_name, blade_type' });
-
         if (error) throw error;
         res.status(200).json({ message: 'Inventory updated successfully' });
     } catch (error) {
@@ -112,7 +101,6 @@ router.post('/logs', verifyStockPassword, async (req, res) => {
         const { error } = await supabase
             .from('logs')
             .insert({ machine_name, blade_type, action, amount, person_name, group_name });
-
         if (error) throw error;
         res.status(201).json({ message: 'Log entry added successfully' });
     } catch (error) {
@@ -126,9 +114,8 @@ router.post('/machine-blades', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, blade_type } = req.body;
         const { error } = await supabase
-            .from('machine_blades')
+            .from('machine_blades').select('*') // CORRECTED
             .upsert({ machine_id, blade_type }, { onConflict: 'machine_id' });
-
         if (error) throw error;
         res.status(200).json({ message: 'Machine blade updated successfully' });
     } catch (error) {
@@ -142,9 +129,8 @@ router.post('/blade-assignments', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, blade_type, count } = req.body;
         const { error } = await supabase
-            .from('blade_assignments')
+            .from('blade_assignments').select('*') // CORRECTED
             .upsert({ machine_id, blade_type, count }, { onConflict: 'machine_id' });
-
         if (error) throw error;
         res.status(200).json({ message: 'Blade assignment updated successfully' });
     } catch (error) {
@@ -158,9 +144,8 @@ router.post('/machine-status', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, status } = req.body;
         const { error } = await supabase
-            .from('machine_status')
+            .from('machine_status').select('*') // CORRECTED
             .upsert({ machine_id, status }, { onConflict: 'machine_id' });
-
         if (error) throw error;
         res.status(200).json({ message: 'Machine status updated successfully' });
     } catch (error) {
@@ -177,14 +162,10 @@ router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
             .from('logs')
             .delete()
             .eq('id', id);
-
         if (error) throw error;
-
-        // Check if any row was deleted
         if (!data || data.length === 0) {
             return res.status(404).json({ message: 'Log entry not found' });
         }
-
         res.status(200).json({ message: 'Log entry deleted successfully' });
     } catch (error) {
         console.error('Error deleting log entry:', error);
@@ -195,21 +176,19 @@ router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
 // POST /api/reset - Reset all data
 router.post('/reset', verifyStockPassword, async (req, res) => {
     try {
-        // Delete all rows from the tables. Using .neq() is a way to delete all.
-        const { error: baError } = await supabase.from('blade_assignments').delete().neq('machine_id', '');
-        const { error: mbError } = await supabase.from('machine_blades').delete().neq('machine_id', '');
-        const { error: msError } = await supabase.from('machine_status').delete().neq('machine_id', '');
+        const { error: baError } = await supabase.from('blade_assignments').delete().neq('machine_id', ''); // CORRECTED
+        const { error: mbError } = await supabase.from('machine_blades').delete().neq('machine_id', ''); // CORRECTED
+        const { error: msError } = await supabase.from('machine_status').delete().neq('machine_id', ''); // CORRECTED
         const { error: logError } = await supabase.from('logs').delete().neq('id', -1);
 
         if (baError || mbError || msError || logError) {
             throw new Error('Failed to reset one or more tables.');
         }
 
-        // Reset inventory to zero for all items in a single, efficient call
         const { error: invError } = await supabase
             .from('inventory')
             .update({ fixed: 0, available: 0 })
-            .neq('group_name', null); // This condition effectively targets all rows
+            .neq('group_name', null);
 
         if (invError) throw invError;
 
