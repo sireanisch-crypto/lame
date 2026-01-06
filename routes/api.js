@@ -97,10 +97,15 @@ router.post('/inventory', verifyStockPassword, async (req, res) => {
 // POST /api/logs - Add a new log entry
 router.post('/logs', verifyStockPassword, async (req, res) => {
     try {
-        const { machine_name, blade_type, action, amount, person_name, group_name } = req.body;
+        // Destructure the body and explicitly discard the 'id'
+        const { id, ...logData } = req.body;
+
+        const { machine_name, blade_type, action, amount, person_name, group_name } = logData;
+
         const { error } = await supabase
             .from('logs')
             .insert({ machine_name, blade_type, action, amount, person_name, group_name });
+
         if (error) throw error;
         res.status(201).json({ message: 'Log entry added successfully' });
     } catch (error) {
