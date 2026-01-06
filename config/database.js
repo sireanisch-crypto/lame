@@ -1,10 +1,7 @@
-// database.js - Supabase Configuration
-const { createClient } = require('@supabase/supabase-js');
+// config/database.js - Supabase Configuration
+import { createClient } from '@supabase/supabase-js';
 
-// Create a single Supabase client for the app to use
-const supabase = createClient(
-  process.env.SUPABASE_URL, // Your new Supabase Project URL
-  process.env.SUPABASE_ANON_KEY // Your new Supabase Anon Key
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // Use the service role key
 
-module.exports = { supabase };
+export const supabase = createClient(supabaseUrl, supabaseServiceKey);
