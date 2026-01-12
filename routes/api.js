@@ -23,14 +23,18 @@ router.get('/data', async (req, res) => {
             { data: machineBlades, error: mbError },
             { data: bladeAssignments, error: baError },
             { data: machineStatus, error: msError },
-            { data: machineComponents, error: mcError }
+            { data: machineComponents, error: mcError },
+            { data: componentInventory, error: ciError } // ADD THIS LINE
+
         ] = await Promise.all([
             supabase.from('inventory').select('*'),
             supabase.from('logs').select('*').order('created_at', { ascending: false }),
             supabase.from('machine_blades').select('*'),
             supabase.from('blade_assignments').select('*'),
             supabase.from('machine_status').select('*'),
-            supabase.from('machine_components').select('*')
+            supabase.from('machine_components').select('*'),
+            supabase.from('machine_components').select('*'),    // ADD THIS LINE
+            supabase.from('component_inventory').select('*')
         ]);
 
         if (invError || logError || mbError || baError || msError) {
@@ -79,13 +83,23 @@ router.get('/data', async (req, res) => {
             return acc;
         }, {});
 
+        // Transform component inventory into a structured object
+        const componentInventoryObj = componentInventory.reduce((acc, item) => {
+            if (!acc[item.component_type]) {
+                acc[item.component_type] = [];
+            }
+            acc[item.component_type].push({ spec: item.spec, stock: item.stock });
+            return acc;
+        }, {});
+
         res.json({
             inventory: nestedInventory,
             logs: logs,
             machineBlades: machineBladesObj,
             bladeAssignments: bladeAssignmentsObj,
             machineStatus: machineStatusObj,
-            machineComponents: machineComponentsObj // ADD THIS LINE
+            machineComponents: machineComponentsObj,
+            componentInventory: componentInventoryObj // ADD THIS LINE
         });
 
     } catch (error) {
@@ -236,6 +250,23 @@ router.post('/machine-components', verifyStockPassword, async (req, res) => {
         res.status(200).json({ message: 'Machine component updated successfully' });
     } catch (error) {
         console.error('Error updating machine component:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// DELETE /api/machine-components/:id - Delete a component from a machine
+router.delete('/machine-components/:id', verifyStockPassword, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase
+            .from('machine_components')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.status(200).json({ message: 'Machine component deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting machine component:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
