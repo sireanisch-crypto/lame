@@ -22,13 +22,15 @@ router.get('/data', async (req, res) => {
             { data: logs, error: logError },
             { data: machineBlades, error: mbError },
             { data: bladeAssignments, error: baError },
-            { data: machineStatus, error: msError }
+            { data: machineStatus, error: msError },
+            { data: machineComponents, error: mcError }
         ] = await Promise.all([
             supabase.from('inventory').select('*'),
             supabase.from('logs').select('*').order('created_at', { ascending: false }),
-            supabase.from('machine_blades').select('*'),      // CORRECTED
-            supabase.from('blade_assignments').select('*'),  // CORRECTED
-            supabase.from('machine_status').select('*')      // CORRECTED
+            supabase.from('machine_blades').select('*'),
+            supabase.from('blade_assignments').select('*'),
+            supabase.from('machine_status').select('*'),
+            supabase.from('machine_components').select('*')
         ]);
 
         if (invError || logError || mbError || baError || msError) {
@@ -65,12 +67,25 @@ router.get('/data', async (req, res) => {
             machineStatusObj[item.machine_id] = item.status;
         });
 
+        // Transform machine components into a nested object
+        const machineComponentsObj = machineComponents.reduce((acc, item) => {
+            if (!acc[item.machine_id]) {
+                acc[item.machine_id] = {};
+            }
+            acc[item.machine_id][item.component_type] = {
+                spec: item.component_spec,
+                quantity: item.quantity
+            };
+            return acc;
+        }, {});
+
         res.json({
             inventory: nestedInventory,
             logs: logs,
             machineBlades: machineBladesObj,
             bladeAssignments: bladeAssignmentsObj,
-            machineStatus: machineStatusObj
+            machineStatus: machineStatusObj,
+            machineComponents: machineComponentsObj // ADD THIS LINE
         });
 
     } catch (error) {
@@ -205,6 +220,22 @@ router.post('/reset', verifyStockPassword, async (req, res) => {
         res.json({ message: 'All data has been reset successfully' });
     } catch (error) {
         console.error('Error resetting data:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// POST /api/machine-components - Update a machine component
+router.post('/machine-components', verifyStockPassword, async (req, res) => {
+    try {
+        const { machine_id, component_type, component_spec, quantity } = req.body;
+        const { error } = await supabase
+            .from('machine_components')
+            .upsert({ machine_id, component_type, component_spec, quantity }, { onConflict: 'machine_id, component_type' });
+
+        if (error) throw error;
+        res.status(200).json({ message: 'Machine component updated successfully' });
+    } catch (error) {
+        console.error('Error updating machine component:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
