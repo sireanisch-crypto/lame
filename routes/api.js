@@ -242,15 +242,44 @@ router.post('/reset', verifyStockPassword, async (req, res) => {
 });
 
 // POST /api/machine-components - Update a machine component
+// POST /api/machine-components - Update a machine component
 router.post('/machine-components', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, component_type, component_spec, quantity } = req.body;
+
+        // Check if there's enough stock in component_inventory
+        const { data: stockData, error: stockError } = await supabase
+            .from('component_inventory')
+            .select('stock')
+            .eq('component_type', component_type)
+            .eq('spec', component_spec)
+            .single();
+
+        if (stockError || !stockData) {
+            return res.status(404).json({ message: 'Component not found in inventory' });
+        }
+
+        if (stockData.stock < quantity) {
+            return res.status(400).json({ message: 'Insufficient stock in inventory' });
+        }
+
+        // Add the component to the machine
         const { error } = await supabase
             .from('machine_components')
-            .upsert({ machine_id, component_type, component_spec, quantity }, { onConflict: 'machine_id, component_type' });
+            .insert({ machine_id, component_type, component_spec, quantity });
 
         if (error) throw error;
-        res.status(200).json({ message: 'Machine component updated successfully' });
+
+        // Update the inventory stock
+        const { error: updateError } = await supabase
+            .from('component_inventory')
+            .update({ stock: stockData.stock - quantity })
+            .eq('component_type', component_type)
+            .eq('spec', component_spec);
+
+        if (updateError) throw updateError;
+
+        res.status(200).json({ message: 'Machine component added successfully' });
     } catch (error) {
         console.error('Error updating machine component:', error);
         res.status(500).json({ message: 'Server error' });
@@ -261,12 +290,46 @@ router.post('/machine-components', verifyStockPassword, async (req, res) => {
 router.delete('/machine-components/:id', verifyStockPassword, async (req, res) => {
     try {
         const { id } = req.params;
+
+        // First, get the component details before deleting
+        const { data: componentData, error: fetchError } = await supabase
+            .from('machine_components')
+            .select('component_type, component_spec, quantity')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !componentData) {
+            return res.status(404).json({ message: 'Component not found' });
+        }
+
+        // Delete the component from the machine
         const { error } = await supabase
             .from('machine_components')
             .delete()
             .eq('id', id);
 
         if (error) throw error;
+
+        // Update the inventory stock (add back the quantity)
+        const { data: stockData, error: stockError } = await supabase
+            .from('component_inventory')
+            .select('stock')
+            .eq('component_type', componentData.component_type)
+            .eq('spec', componentData.component_spec)
+            .single();
+
+        if (stockError || !stockData) {
+            return res.status(404).json({ message: 'Component not found in inventory' });
+        }
+
+        const { error: updateError } = await supabase
+            .from('component_inventory')
+            .update({ stock: stockData.stock + componentData.quantity })
+            .eq('component_type', componentData.component_type)
+            .eq('spec', componentData.component_spec);
+
+        if (updateError) throw updateError;
+
         res.status(200).json({ message: 'Machine component deleted successfully' });
     } catch (error) {
         console.error('Error deleting machine component:', error);
