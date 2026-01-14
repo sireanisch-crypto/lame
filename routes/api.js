@@ -24,8 +24,7 @@ router.get('/data', async (req, res) => {
             { data: bladeAssignments, error: baError },
             { data: machineStatus, error: msError },
             { data: machineComponents, error: mcError },
-            { data: componentInventory, error: ciError } // ADD THIS LINE
-
+            { data: componentInventory, error: ciError }
         ] = await Promise.all([
             supabase.from('inventory').select('*'),
             supabase.from('logs').select('*').order('created_at', { ascending: false }),
@@ -33,12 +32,12 @@ router.get('/data', async (req, res) => {
             supabase.from('blade_assignments').select('*'),
             supabase.from('machine_status').select('*'),
             supabase.from('machine_components').select('*'),
-            supabase.from('machine_components').select('*'),    // ADD THIS LINE
             supabase.from('component_inventory').select('*')
         ]);
 
-        if (invError || logError || mbError || baError || msError) {
-            console.error('Supabase fetch error:', { invError, logError, mbError, baError, msError });
+        // Check for errors in all queries
+        if (invError || logError || mbError || baError || msError || mcError || ciError) {
+            console.error('Supabase fetch error:', { invError, logError, mbError, baError, msError, mcError, ciError });
             return res.status(500).json({ message: 'Failed to fetch data from database' });
         }
 
@@ -76,10 +75,14 @@ router.get('/data', async (req, res) => {
             if (!acc[item.machine_id]) {
                 acc[item.machine_id] = {};
             }
-            acc[item.machine_id][item.component_type] = {
+            if (!acc[item.machine_id][item.component_type]) {
+                acc[item.machine_id][item.component_type] = [];
+            }
+            acc[item.machine_id][item.component_type].push({
+                id: item.id,
                 spec: item.component_spec,
                 quantity: item.quantity
-            };
+            });
             return acc;
         }, {});
 
@@ -99,7 +102,7 @@ router.get('/data', async (req, res) => {
             bladeAssignments: bladeAssignmentsObj,
             machineStatus: machineStatusObj,
             machineComponents: machineComponentsObj,
-            componentInventory: componentInventoryObj // ADD THIS LINE
+            componentInventory: componentInventoryObj
         });
 
     } catch (error) {
