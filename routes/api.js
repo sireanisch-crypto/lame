@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { supabase } = require('../config/database'); // Import the Supabase client
+const { supabase } = require('../config/database');
 
 // --- Middleware ---
 const verifyStockPassword = (req, res, next) => {
@@ -218,9 +218,9 @@ router.delete('/logs/:id', verifyStockPassword, async (req, res) => {
 // POST /api/reset - Reset all data
 router.post('/reset', verifyStockPassword, async (req, res) => {
     try {
-        const { error: baError } = await supabase.from('blade_assignments').delete().neq('machine_id', ''); // CORRECTED
-        const { error: mbError } = await supabase.from('machine_blades').delete().neq('machine_id', ''); // CORRECTED
-        const { error: msError } = await supabase.from('machine_status').delete().neq('machine_id', ''); // CORRECTED
+        const { error: baError } = await supabase.from('blade_assignments').delete().neq('machine_id', '');
+        const { error: mbError } = await supabase.from('machine_blades').delete().neq('machine_id', '');
+        const { error: msError } = await supabase.from('machine_status').delete().neq('machine_id', '');
         const { error: logError } = await supabase.from('logs').delete().neq('id', -1);
 
         if (baError || mbError || msError || logError) {
@@ -242,7 +242,6 @@ router.post('/reset', verifyStockPassword, async (req, res) => {
 });
 
 // POST /api/machine-components - Update a machine component
-// POST /api/machine-components - Update a machine component
 router.post('/machine-components', verifyStockPassword, async (req, res) => {
     try {
         const { machine_id, component_type, component_spec, quantity } = req.body;
@@ -263,10 +262,19 @@ router.post('/machine-components', verifyStockPassword, async (req, res) => {
             return res.status(400).json({ message: 'Insufficient stock in inventory' });
         }
 
-        // Add the component to the machine
+        // Generate a unique ID for the component
+        const component_id = `${machine_id}-${component_type}-${Date.now()}`;
+
+        // Add the component to the machine with the generated ID
         const { error } = await supabase
             .from('machine_components')
-            .insert({ machine_id, component_type, component_spec, quantity });
+            .insert({
+                id: component_id,
+                machine_id,
+                component_type,
+                component_spec,
+                quantity
+            });
 
         if (error) throw error;
 
@@ -279,7 +287,7 @@ router.post('/machine-components', verifyStockPassword, async (req, res) => {
 
         if (updateError) throw updateError;
 
-        res.status(200).json({ message: 'Machine component added successfully' });
+        res.status(200).json({ message: 'Machine component added successfully', id: component_id });
     } catch (error) {
         console.error('Error updating machine component:', error);
         res.status(500).json({ message: 'Server error' });

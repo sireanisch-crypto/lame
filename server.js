@@ -9,10 +9,9 @@ const PORT = process.env.PORT || 10000;
 // Middleware - Fix CORS
 app.use(cors({
   origin: [
-    'https://blade-management-frontend.vercel.app', // Your Vercel URL
-    'https://soudeuse-yp.vercel.app',      // Your old URL (keep for now)
+    'https://blade-management-frontend.vercel.app', 
+    'https://soudeuse-yp.vercel.app',      
     'https://lame-inob.onrender.com',
-    // 'https://rhoqmbvszurwjakdtdek.supabase.co',
     'http://localhost:10000'
   ],
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
